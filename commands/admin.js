@@ -216,6 +216,157 @@ module.exports = () => {
     }
   });
 
+  // Process order (mark as processing)
+  bot.onText(/\/process_order (.+)/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    const orderId = match[1];
+
+    if (!ADMIN_IDS.includes(userId)) {
+      return bot.sendMessage(
+        chatId,
+        "⚠️ You are not authorized to process orders."
+      );
+    }
+
+    try {
+      const order = await Order.findByIdAndUpdate(
+        orderId,
+        { status: "processing", updatedAt: new Date() },
+        { new: true }
+      );
+
+      if (!order) {
+        return bot.sendMessage(chatId, "❌ Order not found.");
+      }
+
+      // Notify customer
+      await bot.sendMessage(
+        order.userId,
+        `🛠️ Order #${order._id} is now being processed\n\n` +
+          `We're preparing your items for shipping.`
+      );
+
+      await bot.sendMessage(
+        chatId,
+        `✅ Order #${order._id} marked as processing\n` +
+          `Customer has been notified.`,
+        getAdminKeyboard()
+      );
+    } catch (error) {
+      console.error("Order processing error:", error);
+      await bot.sendMessage(
+        chatId,
+        "❌ Failed to process order. Please check the order ID and try again.",
+        getAdminKeyboard()
+      );
+    }
+  });
+
+  // Ship order (add tracking number)
+  bot.onText(/\/ship_order (.+?) (.+)/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    const orderId = match[1];
+    const trackingNumber = match[2];
+
+    if (!ADMIN_IDS.includes(userId)) {
+      return bot.sendMessage(
+        chatId,
+        "⚠️ You are not authorized to ship orders."
+      );
+    }
+
+    try {
+      const order = await Order.findByIdAndUpdate(
+        orderId,
+        {
+          status: "shipped",
+          trackingNumber,
+          updatedAt: new Date(),
+        },
+        { new: true }
+      );
+
+      if (!order) {
+        return bot.sendMessage(chatId, "❌ Order not found.");
+      }
+
+      // Notify customer
+      let trackingMessage = `🚚 Order #${order._id} has been shipped!\n\n`;
+      trackingMessage += `🔍 Tracking Number: ${trackingNumber}\n`;
+
+      if (order.shippingDetails.country === "US") {
+        trackingMessage += `📦 Track via USPS: https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumber}`;
+      } // Add other carriers as needed
+
+      await bot.sendMessage(order.userId, trackingMessage);
+
+      await bot.sendMessage(
+        chatId,
+        `✅ Order #${order._id} marked as shipped\n` +
+          `📦 Tracking: ${trackingNumber}\n` +
+          `Customer has been notified.`,
+        getAdminKeyboard()
+      );
+    } catch (error) {
+      console.error("Shipping error:", error);
+      await bot.sendMessage(
+        chatId,
+        "❌ Failed to ship order. Please check the order ID and try again.",
+        getAdminKeyboard()
+      );
+    }
+  });
+
+  // Complete order (mark as delivered)
+  bot.onText(/\/complete_order (.+)/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    const orderId = match[1];
+
+    if (!ADMIN_IDS.includes(userId)) {
+      return bot.sendMessage(
+        chatId,
+        "⚠️ You are not authorized to complete orders."
+      );
+    }
+
+    try {
+      const order = await Order.findByIdAndUpdate(
+        orderId,
+        { status: "delivered", updatedAt: new Date() },
+        { new: true }
+      );
+
+      if (!order) {
+        return bot.sendMessage(chatId, "❌ Order not found.");
+      }
+
+      // Notify customer
+      await bot.sendMessage(
+        order.userId,
+        `🎉 Order #${order._id} has been delivered!\n\n` +
+          `Thank you for shopping with us!\n` +
+          `Please consider leaving a review.`
+      );
+
+      await bot.sendMessage(
+        chatId,
+        `✅ Order #${order._id} marked as delivered\n` +
+          `Customer has been notified.`,
+        getAdminKeyboard()
+      );
+    } catch (error) {
+      console.error("Order completion error:", error);
+      await bot.sendMessage(
+        chatId,
+        "❌ Failed to complete order. Please check the order ID and try again.",
+        getAdminKeyboard()
+      );
+    }
+  });
+
   // Add this to your admin commands
   bot.onText(/\/confirm_payment (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
@@ -268,49 +419,185 @@ module.exports = () => {
     }
   });
 
-  // Admin order cancellation command
+  // VIEW ORDER DETAILS
+  bot.onText(/\/order_details (.+)/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    const orderId = match[1];
+
+    if (!ADMIN_IDS.includes(userId)) {
+      return bot.sendMessage(chatId, "⚠️ Unauthorized access");
+    }
+
+    try {
+      const order = await Order.findById(orderId).populate("items.productId");
+
+      if (!order) {
+        return bot.sendMessage(chatId, "❌ Order not found");
+      }
+
+      let message = `📦 Order #${order._id}\n`;
+      message += `👤 Customer ID: ${order.userId}\n`;
+      message += `🔄 Status: ${order.status}\n`;
+      message += `📅 Date: ${order.createdAt.toLocaleString()}\n\n`;
+      message += `📝 Items:\n`;
+
+      order.items.forEach((item) => {
+        message += `- ${item.productId.name} (Qty: ${
+          item.quantity
+        }) - $${item.priceAtPurchase.toFixed(2)}\n`;
+      });
+
+      message += `\n💵 Total: $${order.totalAmount.toFixed(2)}\n`;
+      message += `🏠 Shipping to: ${order.shippingDetails.street}, ${order.shippingDetails.city}\n`;
+
+      if (order.trackingNumber) {
+        message += `📦 Tracking: ${order.trackingNumber}\n`;
+      }
+
+      await bot.sendMessage(chatId, message, getAdminKeyboard());
+    } catch (error) {
+      console.error("Order details error:", error);
+      await bot.sendMessage(
+        chatId,
+        "❌ Failed to fetch order details",
+        getAdminKeyboard()
+      );
+    }
+  });
+
+  // LIST PENDING ORDERS
+  bot.onText(/\/pending_orders/, async (msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+
+    if (!ADMIN_IDS.includes(userId)) {
+      return bot.sendMessage(chatId, "⚠️ Unauthorized access");
+    }
+
+    try {
+      const pendingOrders = await Order.find({
+        status: { $in: ["payment_received", "processing"] },
+      })
+        .sort({ createdAt: -1 })
+        .limit(10);
+
+      if (pendingOrders.length === 0) {
+        return bot.sendMessage(
+          chatId,
+          "✅ No pending orders found",
+          getAdminKeyboard()
+        );
+      }
+
+      let message = "📋 Pending Orders:\n\n";
+      pendingOrders.forEach((order) => {
+        message += `#${order._id}\n`;
+        message += `👤 ${order.userId} | 💵 $${order.totalAmount.toFixed(2)}\n`;
+        message += `🔄 ${
+          order.status
+        } | 📅 ${order.createdAt.toLocaleDateString()}\n`;
+        message += `----------------\n`;
+      });
+
+      await bot.sendMessage(chatId, message, getAdminKeyboard());
+    } catch (error) {
+      console.error("Pending orders error:", error);
+      await bot.sendMessage(
+        chatId,
+        "❌ Failed to fetch pending orders",
+        getAdminKeyboard()
+      );
+    }
+  });
+
+  // CANCEL ORDER
   bot.onText(/\/cancel_order (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     const orderId = match[1];
 
     if (!ADMIN_IDS.includes(userId)) {
-      return bot.sendMessage(
-        chatId,
-        "⚠️ You are not authorized to cancel orders."
-      );
+      return bot.sendMessage(chatId, "⚠️ Unauthorized access");
     }
 
     try {
-      const order = await Order.findById(orderId);
+      const order = await Order.findByIdAndUpdate(
+        orderId,
+        { status: "cancelled", updatedAt: new Date() },
+        { new: true }
+      );
+
       if (!order) {
-        return bot.sendMessage(chatId, "❌ Order not found.");
+        return bot.sendMessage(chatId, "❌ Order not found");
       }
-
-      if (order.status === "cancelled") {
-        return bot.sendMessage(chatId, "ℹ️ Order is already cancelled.");
-      }
-
-      order.status = "cancelled";
-      await order.save();
 
       // Notify customer
       await bot.sendMessage(
         order.userId,
-        `❌ Order #${order._id} has been cancelled.\n\n` +
+        `❌ Order #${order._id} has been cancelled\n\n` +
           `If this was a mistake, please contact support.`
       );
 
       await bot.sendMessage(
         chatId,
-        `✅ Order #${order._id} has been cancelled.\n` +
-          `Customer has been notified.`
+        `✅ Order #${order._id} cancelled\n` + `Customer has been notified.`,
+        getAdminKeyboard()
       );
     } catch (error) {
-      console.error("Order cancellation error:", error);
+      console.error("Cancel order error:", error);
       await bot.sendMessage(
         chatId,
-        "❌ Failed to cancel order. Please check the order ID and try again."
+        "❌ Failed to cancel order",
+        getAdminKeyboard()
+      );
+    }
+  });
+
+  // LIST ALL ORDERS (with filters)
+  bot.onText(/\/list_orders(?: (.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    const filter = match[1] || "all";
+
+    if (!ADMIN_IDS.includes(userId)) {
+      return bot.sendMessage(chatId, "⚠️ Unauthorized access");
+    }
+
+    try {
+      let query = {};
+      if (filter !== "all") {
+        query.status = filter;
+      }
+
+      const orders = await Order.find(query).sort({ createdAt: -1 }).limit(15);
+
+      if (orders.length === 0) {
+        return bot.sendMessage(
+          chatId,
+          `No ${filter !== "all" ? filter + " " : ""}orders found`,
+          getAdminKeyboard()
+        );
+      }
+
+      let message = `📦 Orders (${filter}):\n\n`;
+      orders.forEach((order) => {
+        message += `#${order._id}\n`;
+        message += `👤 ${order.userId} | 💵 $${order.totalAmount.toFixed(2)}\n`;
+        message += `🔄 ${
+          order.status
+        } | 📅 ${order.createdAt.toLocaleDateString()}\n`;
+        message += `----------------\n`;
+      });
+
+      message += `\nUse /order_details [id] for more info`;
+      await bot.sendMessage(chatId, message, getAdminKeyboard());
+    } catch (error) {
+      console.error("List orders error:", error);
+      await bot.sendMessage(
+        chatId,
+        "❌ Failed to fetch orders",
+        getAdminKeyboard()
       );
     }
   });
