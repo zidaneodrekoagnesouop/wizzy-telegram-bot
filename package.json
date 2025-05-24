@@ -1,0 +1,31 @@
+{
+  "name": "telegram-shop-bot",
+  "version": "1.0.0",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "engines": {
+    "node": "22.x"
+  },  
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anga4/telegram-shop-bot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/anga4/telegram-shop-bot/issues"
+  },
+  "homepage": "https://github.com/anga4/telegram-shop-bot#readme",
+  "description": "",
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "mongoose": "^8.15.0",
+    "node-telegram-bot-api": "^0.66.0",
+    "nodemon": "^3.1.10"
+  }
+}
