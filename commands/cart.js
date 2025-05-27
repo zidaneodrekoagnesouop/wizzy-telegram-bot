@@ -230,7 +230,7 @@ module.exports = () => {
           selectedMethod.ticker
         } to:\n` +
           `<code>${selectedMethod.walletAddress}</code>\n\n` +
-          `Amount in EUR: €${checkoutState.totalAmount.toFixed(2)}\n` +
+          `Amount in GBP: £${checkoutState.totalAmount.toFixed(2)}\n` +
           `Payment expires at: ${paymentExpiresAt.toLocaleString()}\n\n` +
           `After payment, your order will be processed once we confirm the transaction.`,
         { parse_mode: "HTML" }
@@ -363,11 +363,11 @@ module.exports = () => {
     cartItems.forEach((item) => {
       message += `${item.product.name} - ${
         item.quantity
-      } × $${item.unitPrice.toFixed(2)} = $${(
+      } × £${item.unitPrice.toFixed(2)} = £${(
         item.unitPrice * item.quantity
       ).toFixed(2)}\n`;
     });
-    message += `\nTotal: $${total.toFixed(2)}`;
+    message += `\nTotal: £${total.toFixed(2)}`;
 
     try {
       if (messageId) {

@@ -1,26 +1,26 @@
 module.exports = [
-    {
-      name: "Bitcoin (BTC)",
-      ticker: "BTC",
-      walletAddress: "3FZbgi29cpjq2GjdwV8eyHuJJnkLtktZc5",
-      conversionRate: 0.000021 // Example rate (EUR to BTC)
-    },
-    {
-      name: "Ethereum (ETH)",
-      ticker: "ETH",
-      walletAddress: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
-      conversionRate: 0.00031 // Example rate (EUR to ETH)
-    },
-    {
-      name: "Litecoin (LTC)",
-      ticker: "LTC",
-      walletAddress: "LRXhXy5QjWPeDqwdkAsSiVm3JmJQxqA3w5",
-      conversionRate: 0.0032 // Example rate (EUR to LTC)
-    },
-    {
-      name: "Monero (XMR)",
-      ticker: "XMR",
-      walletAddress: "47V8V3vJyNok7Q6hVmUeXQU7YbqDop5gRjYf7TyfQ4HsPZ3sEWa1X1J5Qkqo5kEJ5n7dwV1qJ5r5t5J5r5t5J5r",
-      conversionRate: 0.0041 // Example rate (EUR to XMR)
-    }
-  ];
+  {
+    name: "Bitcoin (BTC)",
+    ticker: "BTC",
+    walletAddress: "bc1qvxvkcdw43c3utfe34d8xjl4amrarcerfxd87s2",
+    conversionRate: 0.000023 // GBP to BTC (based on current ~£43,000/BTC)
+  },
+  {
+    name: "Ethereum - ERC20 (ETH)",
+    ticker: "ETH",
+    walletAddress: "0xb54c4B5883CC994C7c0e007F66C12b21fBcC30fb",
+    conversionRate: 0.00058 // GBP to ETH (based on current ~£1,700/ETH)
+  },
+  {
+    name: "Litecoin (LTC)",
+    ticker: "LTC",
+    walletAddress: "LVccJBKew9ZwWxuXfpGzgnCtTCzaNkH1W7",
+    conversionRate: 0.014 // GBP to LTC (based on current ~£70/LTC)
+  },
+  {
+    name: "Tether - Tron TRC20 (USDT)",
+    ticker: "USDT",
+    walletAddress: "TSwtEnUuA5rFpCYHCcQXWobiSz88KxwYzB", // Example TRC20 address
+    conversionRate: 1.27 // GBP to USDT (based on current ~$1.27/£1 exchange rate)
+  }
+];

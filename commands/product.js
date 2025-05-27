@@ -273,9 +273,9 @@ module.exports = () => {
 
     const message = `${formatProduct(
       product
-    )}\n\nQuantity: ${quantity}\nUnit Price: $${unitPrice.toFixed(
+    )}\n\nQuantity: ${quantity}\nUnit Price: £${unitPrice.toFixed(
       2
-    )}\nTotal: $${totalPrice.toFixed(2)}`;
+    )}\nTotal: £${totalPrice.toFixed(2)}`;
 
     if (product.imageUrl) {
       await bot.editMessageCaption(

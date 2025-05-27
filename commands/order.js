@@ -23,7 +23,7 @@ module.exports = () => {
       let message = `📦 Order #${order._id}\n`;
       message += `🔄 Status: ${order.status}\n`;
       message += `📅 Date: ${order.createdAt.toLocaleDateString()}\n`;
-      message += `💳 Amount: €${order.totalAmount.toFixed(2)}\n`;
+      message += `💳 Amount: £${order.totalAmount.toFixed(2)}\n`;
       
       if (order.trackingNumber) {
         message += `🚚 Tracking: ${order.trackingNumber}\n`;

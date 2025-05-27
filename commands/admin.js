@@ -460,7 +460,7 @@ module.exports = () => {
         }) - $${item.priceAtPurchase.toFixed(2)}\n`;
       });
 
-      message += `\n💵 Total: $${order.totalAmount.toFixed(2)}\n`;
+      message += `\n💵 Total: £${order.totalAmount.toFixed(2)}\n`;
       message += `🏠 Shipping to: ${order.shippingDetails.street}, ${order.shippingDetails.city}\n`;
 
       if (order.trackingNumber) {

@@ -5,7 +5,7 @@ const formatProduct = (product) => {
 <b>${product.name}</b>
 ${product.description}
 
-💵 Base Price: $${product.basePrice.toFixed(2)}
+💵 Base Price: £${product.basePrice.toFixed(2)}
 `;
 
   if (product.priceTiers && product.priceTiers.length > 0) {
