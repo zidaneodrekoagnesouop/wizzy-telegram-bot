@@ -33,12 +33,14 @@ const getAdminKeyboard = () => ({
 
 const getCategoriesKeyboard = (categories) => ({
   reply_markup: {
-    inline_keyboard: categories.map((category) => [
-      {
-        text: `${category.name} (${category.count})`,
-        callback_data: `category_${category.name}`,
-      },
-    ]),
+    inline_keyboard: [
+      ...categories.map((category) => [
+        {
+          text: `${category.name} (${category.count})`,
+          callback_data: `category_${category.name}`,
+        },
+      ]),
+    ],
   },
 });
 
@@ -128,6 +130,21 @@ const getPaymentMethodsKeyboard = (paymentMethods) => {
   };
 };
 
+// Add this new function for sub-categories keyboard
+const getSubCategoriesKeyboard = (subCategories) => ({
+  reply_markup: {
+    inline_keyboard: [
+      ...subCategories.map((subCat) => [
+        {
+          text: `${subCat.name} (${subCat.count})`,
+          callback_data: `subcategory_${subCat.name}_${subCat.parentCategory}`,
+        },
+      ]),
+      [{ text: "🔙 Back to Categories", callback_data: "back_to_categories" }],
+    ],
+  },
+});
+
 module.exports = {
   getMainKeyboard,
   getAdminKeyboard,
@@ -136,4 +153,5 @@ module.exports = {
   getProductDetailsKeyboard,
   getCartKeyboard,
   getPaymentMethodsKeyboard,
+  getSubCategoriesKeyboard,
 };

@@ -110,6 +110,17 @@ module.exports = () => {
         break;
       case "category":
         cache.category = text;
+        cache.step = "subcategory";
+        bot.sendMessage(
+          chatId,
+          'Please enter the product sub-category (or type "none" to skip):',
+          { reply_markup: { force_reply: true } }
+        );
+        break;
+      case "subcategory":
+        if (text.toLowerCase() !== "none") {
+          cache.subCategory = text;
+        }
         cache.step = "image";
         bot.sendMessage(
           chatId,
@@ -128,6 +139,7 @@ module.exports = () => {
           basePrice: cache.basePrice,
           priceTiers: cache.priceTiers || [],
           category: cache.category,
+          subCategory: cache.subCategory || undefined,
           imageUrl: cache.imageUrl || undefined,
         });
 
@@ -210,7 +222,7 @@ module.exports = () => {
 
       await bot.sendMessage(
         chatId,
-        'What would you like to edit?\nSend in format: "field: new value"\nAvailable fields: name, description, price, category',
+        'What would you like to edit?\nSend in format: "field: new value"\nAvailable fields: name, description, price, category, subCategory',
         getAdminKeyboard()
       );
     }
@@ -619,7 +631,11 @@ module.exports = () => {
     const [field, ...valueParts] = text.split(":").map((part) => part.trim());
     const value = valueParts.join(":").trim();
 
-    if (!["name", "description", "price", "category"].includes(field)) {
+    if (
+      !["name", "description", "price", "category", "subCategory"].includes(
+        field
+      )
+    ) {
       return bot.sendMessage(chatId, "Invalid field. Please try again.");
     }
 

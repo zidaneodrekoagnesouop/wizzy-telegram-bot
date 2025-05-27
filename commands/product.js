@@ -2,16 +2,21 @@ const bot = require("../services/botService");
 const Product = require("../models/Product");
 const {
   getCategoriesKeyboard,
+  getSubCategoriesKeyboard,
   getProductsListKeyboard,
   getProductDetailsKeyboard,
 } = require("../utils/keyboards");
-const { formatProduct, getCategoriesWithCount } = require("../utils/helpers");
+const {
+  formatProduct,
+  getCategoriesWithCount,
+  getSubCategoriesWithCount,
+} = require("../utils/helpers");
 const { getUser } = require("../services/dbService");
 
 const productQuantityCache = {};
 
 module.exports = () => {
-  // Browse products
+  // Browse products - shows categories
   bot.onText(/🛍️ Browse Products/, async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
@@ -29,64 +34,107 @@ module.exports = () => {
     );
   });
 
-  // Handle category selection
   bot.on("callback_query", async (query) => {
     const chatId = query.message.chat.id;
     const userId = query.from.id;
     const data = query.data;
 
-    if (data.startsWith("category_")) {
-      const category = data.replace("category_", "");
-      const products = await Product.find({ category });
+    try {
+      if (data.startsWith("category_")) {
+        const category = data.replace("category_", "");
+        const subCategories = await getSubCategoriesWithCount(category);
 
-      if (products.length === 0) {
-        await bot.answerCallbackQuery(query.id, {
-          text: "No products in this category.",
+        if (subCategories.length > 0) {
+          await bot.answerCallbackQuery(query.id);
+          await bot.editMessageText(`Sub-categories in ${category}:`, {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            ...getSubCategoriesKeyboard(subCategories),
+          });
+        } else {
+          const products = await Product.find({ category });
+
+          if (products.length === 0) {
+            await bot.answerCallbackQuery(query.id, {
+              text: "No products in this category.",
+            });
+            return;
+          }
+
+          await bot.answerCallbackQuery(query.id);
+          await bot.editMessageText(`Products in ${category}:`, {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            ...getProductsListKeyboard(products),
+          });
+        }
+      } else if (data.startsWith("subcategory_")) {
+        const [_, subCategory, category] = data.split("_");
+        const products = await Product.find({ category, subCategory });
+
+        if (products.length === 0) {
+          await bot.answerCallbackQuery(query.id, {
+            text: "No products in this sub-category.",
+          });
+          return;
+        }
+
+        await bot.answerCallbackQuery(query.id);
+        await bot.editMessageText(`Products in ${category} > ${subCategory}:`, {
+          chat_id: chatId,
+          message_id: query.message.message_id,
+          ...getProductsListKeyboard(products),
         });
-        return;
-      }
+      } else if (data.startsWith("product_")) {
+        const productId = data.replace("product_", "");
+        const product = await Product.findById(productId);
+        const user = await getUser(userId);
 
-      await bot.answerCallbackQuery(query.id);
-      await bot.editMessageText(`Products in ${category}:`, {
-        chat_id: chatId,
-        message_id: query.message.message_id,
-        ...getProductsListKeyboard(products),
-      });
-    } else if (data.startsWith("product_")) {
-      const productId = data.replace("product_", "");
-      const product = await Product.findById(productId);
-      const user = await getUser(userId);
+        if (!product) {
+          await bot.answerCallbackQuery(query.id, {
+            text: "Product not found.",
+          });
+          return;
+        }
 
-      if (!product) {
-        await bot.answerCallbackQuery(query.id, { text: "Product not found." });
-        return;
-      }
+        // Initialize quantity for this product
+        productQuantityCache[`${chatId}_${productId}`] = 1;
 
-      // Initialize quantity for this product
-      productQuantityCache[`${chatId}_${productId}`] = 1;
+        await bot.answerCallbackQuery(query.id);
 
-      await bot.answerCallbackQuery(query.id);
+        // Delete the previous message to avoid clutter
+        try {
+          await bot.deleteMessage(chatId, query.message.message_id);
+        } catch (e) {
+          console.log("Couldn't delete message:", e.message);
+        }
 
-      const message = formatProduct(product);
-      if (product.imageUrl) {
-        await bot.sendPhoto(chatId, product.imageUrl, {
-          caption: message,
-          parse_mode: "HTML",
-          ...getProductDetailsKeyboard(product._id, 1, user.isAdmin),
+        const message = formatProduct(product);
+        if (product.imageUrl) {
+          await bot.sendPhoto(chatId, product.imageUrl, {
+            caption: message,
+            parse_mode: "HTML",
+            ...getProductDetailsKeyboard(product._id, 1, user.isAdmin),
+          });
+        } else {
+          await bot.sendMessage(chatId, message, {
+            parse_mode: "HTML",
+            ...getProductDetailsKeyboard(product._id, 1, user.isAdmin),
+          });
+        }
+      } else if (data === "back_to_categories") {
+        const categories = await getCategoriesWithCount();
+
+        await bot.editMessageText("Please select a category:", {
+          chat_id: chatId,
+          message_id: query.message.message_id,
+          ...getCategoriesKeyboard(categories),
         });
-      } else {
-        await bot.sendMessage(chatId, message, {
-          parse_mode: "HTML",
-          ...getProductDetailsKeyboard(product._id, 1, user.isAdmin),
-        });
       }
-    } else if (data === "back_to_categories") {
-      const categories = await getCategoriesWithCount();
-
-      await bot.editMessageText("Please select a category:", {
-        chat_id: chatId,
-        message_id: query.message.message_id,
-        ...getCategoriesKeyboard(categories),
+    } catch (error) {
+      console.error("Error in callback query handler:", error);
+      await bot.answerCallbackQuery(query.id, {
+        text: "An error occurred. Please try again.",
       });
     }
   });
