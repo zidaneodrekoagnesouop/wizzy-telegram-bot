@@ -20,18 +20,21 @@ ${product.description}
   return message;
 };
 
-// Get all categories with counts and sub-category info
 const getCategoriesWithCount = async () => {
   const categories = await Product.aggregate([
     { $group: { _id: "$category", count: { $sum: 1 } } },
     { $sort: { _id: 1 } },
   ]);
 
-  // Get sub-category counts for each category
   const categoriesWithSubs = await Promise.all(
     categories.map(async (cat) => {
       const subCategories = await Product.aggregate([
-        { $match: { category: cat._id } },
+        {
+          $match: {
+            category: cat._id,
+            subCategory: { $exists: true, $ne: null },
+          },
+        },
         { $group: { _id: "$subCategory", count: { $sum: 1 } } },
         { $sort: { _id: 1 } },
       ]);
@@ -39,19 +42,45 @@ const getCategoriesWithCount = async () => {
       return {
         name: cat._id,
         count: cat.count,
-        subCategories: subCategories
-          .filter((sc) => sc._id)
-          .map((sc) => ({
-            name: sc._id,
-            count: sc.count,
-            parentCategory: cat._id,
-          })),
-        subCategoriesCount: subCategories.filter((sc) => sc._id).length,
+        subCategories: subCategories.map((sc) => ({
+          name: sc._id,
+          count: sc.count,
+          parentCategory: cat._id,
+        })),
+        subCategoriesCount: subCategories.length,
       };
     })
   );
 
   return categoriesWithSubs;
+};
+
+const getCategoryContents = async (category) => {
+  // Get sub-categories
+  const subCategories = await Product.aggregate([
+    { $match: { category, subCategory: { $exists: true, $ne: null } } },
+    { $group: { _id: "$subCategory", count: { $sum: 1 } } },
+    { $sort: { _id: 1 } },
+  ]);
+
+  // Get products without sub-categories
+  const productsWithoutSub = await Product.find({
+    category,
+    subCategory: { $exists: false },
+  });
+
+  return {
+    subCategories: subCategories.map((sc) => ({
+      name: sc._id,
+      count: sc.count,
+      parentCategory: category,
+    })),
+    productsWithoutSub,
+  };
+};
+
+const getSubCategoryProducts = async (category, subCategory) => {
+  return await Product.find({ category, subCategory });
 };
 
 // Get sub-categories for a specific category
@@ -76,4 +105,6 @@ module.exports = {
   getCategoriesWithCount,
   getCategoriesWithCount,
   getSubCategoriesWithCount,
+  getCategoryContents,
+  getSubCategoryProducts,
 };

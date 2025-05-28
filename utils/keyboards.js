@@ -145,6 +145,45 @@ const getSubCategoriesKeyboard = (subCategories) => ({
   },
 });
 
+const getCategoryContentsKeyboard = (category, contents) => {
+  const keyboard = [];
+
+  // Add sub-category buttons
+  if (contents.subCategories.length > 0) {
+    keyboard.push(
+      ...contents.subCategories.map((subCat) => [
+        {
+          text: `${subCat.name} (${subCat.count})`,
+          callback_data: `subcategory_${subCat.name}_${subCat.parentCategory}`,
+        },
+      ])
+    );
+  }
+
+  // Add products without sub-categories
+  if (contents.productsWithoutSub.length > 0) {
+    keyboard.push(
+      ...contents.productsWithoutSub.map((product) => [
+        {
+          text: `${product.name}`,
+          callback_data: `product_${product._id}`,
+        },
+      ])
+    );
+  }
+
+  // Add back button
+  keyboard.push([
+    { text: "🔙 Back to Categories", callback_data: "back_to_categories" },
+  ]);
+
+  return {
+    reply_markup: {
+      inline_keyboard: keyboard,
+    },
+  };
+};
+
 module.exports = {
   getMainKeyboard,
   getAdminKeyboard,
@@ -154,4 +193,5 @@ module.exports = {
   getCartKeyboard,
   getPaymentMethodsKeyboard,
   getSubCategoriesKeyboard,
+  getCategoryContentsKeyboard,
 };

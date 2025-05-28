@@ -5,11 +5,14 @@ const {
   getSubCategoriesKeyboard,
   getProductsListKeyboard,
   getProductDetailsKeyboard,
+  getCategoryContentsKeyboard,
 } = require("../utils/keyboards");
 const {
   formatProduct,
   getCategoriesWithCount,
   getSubCategoriesWithCount,
+  getCategoryContents,
+  getSubCategoryProducts,
 } = require("../utils/helpers");
 const { getUser } = require("../services/dbService");
 
@@ -42,35 +45,17 @@ module.exports = () => {
     try {
       if (data.startsWith("category_")) {
         const category = data.replace("category_", "");
-        const subCategories = await getSubCategoriesWithCount(category);
+        const contents = await getCategoryContents(category);
 
-        if (subCategories.length > 0) {
-          await bot.answerCallbackQuery(query.id);
-          await bot.editMessageText(`Sub-categories in ${category}:`, {
-            chat_id: chatId,
-            message_id: query.message.message_id,
-            ...getSubCategoriesKeyboard(subCategories),
-          });
-        } else {
-          const products = await Product.find({ category });
-
-          if (products.length === 0) {
-            await bot.answerCallbackQuery(query.id, {
-              text: "No products in this category.",
-            });
-            return;
-          }
-
-          await bot.answerCallbackQuery(query.id);
-          await bot.editMessageText(`Products in ${category}:`, {
-            chat_id: chatId,
-            message_id: query.message.message_id,
-            ...getProductsListKeyboard(products),
-          });
-        }
+        await bot.answerCallbackQuery(query.id);
+        await bot.editMessageText(`📁 ${category}:`, {
+          chat_id: chatId,
+          message_id: query.message.message_id,
+          ...getCategoryContentsKeyboard(category, contents),
+        });
       } else if (data.startsWith("subcategory_")) {
         const [_, subCategory, category] = data.split("_");
-        const products = await Product.find({ category, subCategory });
+        const products = await getSubCategoryProducts(category, subCategory);
 
         if (products.length === 0) {
           await bot.answerCallbackQuery(query.id, {
@@ -80,11 +65,14 @@ module.exports = () => {
         }
 
         await bot.answerCallbackQuery(query.id);
-        await bot.editMessageText(`Products in ${category} > ${subCategory}:`, {
-          chat_id: chatId,
-          message_id: query.message.message_id,
-          ...getProductsListKeyboard(products),
-        });
+        await bot.editMessageText(
+          `📦 Products in ${category} > ${subCategory}:`,
+          {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            ...getProductsListKeyboard(products),
+          }
+        );
       } else if (data.startsWith("product_")) {
         const productId = data.replace("product_", "");
         const product = await Product.findById(productId);
@@ -97,12 +85,9 @@ module.exports = () => {
           return;
         }
 
-        // Initialize quantity for this product
         productQuantityCache[`${chatId}_${productId}`] = 1;
-
         await bot.answerCallbackQuery(query.id);
 
-        // Delete the previous message to avoid clutter
         try {
           await bot.deleteMessage(chatId, query.message.message_id);
         } catch (e) {
@@ -124,7 +109,6 @@ module.exports = () => {
         }
       } else if (data === "back_to_categories") {
         const categories = await getCategoriesWithCount();
-
         await bot.editMessageText("Please select a category:", {
           chat_id: chatId,
           message_id: query.message.message_id,
