@@ -8,14 +8,14 @@ ${product.description}
 💵 Base Price: £${product.basePrice.toFixed(2)}
 `;
 
-  if (product.priceTiers && product.priceTiers.length > 0) {
-    message += `\n📊 Bulk Pricing:\n`;
-    product.priceTiers
-      .sort((a, b) => a.minQuantity - b.minQuantity)
-      .forEach((tier) => {
-        message += `- ${tier.minQuantity}+: $${tier.price.toFixed(2)} each\n`;
-      });
-  }
+  // if (product.priceTiers && product.priceTiers.length > 0) {
+  //   message += `\n📊 Bulk Pricing:\n`;
+  //   product.priceTiers
+  //     .sort((a, b) => a.minQuantity - b.minQuantity)
+  //     .forEach((tier) => {
+  //       message += `- ${tier.minQuantity}+: $${tier.price.toFixed(2)} each\n`;
+  //     });
+  // }
 
   return message;
 };
