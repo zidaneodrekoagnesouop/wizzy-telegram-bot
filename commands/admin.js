@@ -460,7 +460,7 @@ module.exports = () => {
         }) - $${item.priceAtPurchase.toFixed(2)}\n`;
       });
 
-      message += `\n💵 Total: £${order.totalAmount.toFixed(2)}\n`;
+      message += `\n💷 Total: £${order.totalAmount.toFixed(2)}\n`;
       message += `🏠 Shipping to: ${order.shippingDetails.street}, ${order.shippingDetails.city}\n`;
 
       if (order.trackingNumber) {
@@ -505,7 +505,7 @@ module.exports = () => {
       let message = "📋 Pending Orders:\n\n";
       pendingOrders.forEach((order) => {
         message += `#${order._id}\n`;
-        message += `👤 ${order.userId} | 💵 $${order.totalAmount.toFixed(2)}\n`;
+        message += `👤 ${order.userId} | 💷 £${order.totalAmount.toFixed(2)}\n`;
         message += `🔄 ${
           order.status
         } | 📅 ${order.createdAt.toLocaleDateString()}\n`;
@@ -595,7 +595,7 @@ module.exports = () => {
       let message = `📦 Orders (${filter}):\n\n`;
       orders.forEach((order) => {
         message += `#${order._id}\n`;
-        message += `👤 ${order.userId} | 💵 $${order.totalAmount.toFixed(2)}\n`;
+        message += `👤 ${order.userId} | 💷 £${order.totalAmount.toFixed(2)}\n`;
         message += `🔄 ${
           order.status
         } | 📅 ${order.createdAt.toLocaleDateString()}\n`;
