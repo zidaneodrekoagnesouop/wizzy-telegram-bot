@@ -14,7 +14,7 @@ module.exports = [
   {
     name: "Litecoin (LTC)",
     ticker: "LTC",
-    walletAddress: "LVccJBKew9ZwWxuXfpGzgnCtTCzaNkH1W7",
+    walletAddress: "ltc1qthysfgku52mzrj029834gkclzzd80etts3j32t",
     conversionRate: 0.014 // GBP to LTC (based on current ~£70/LTC)
   },
   {
