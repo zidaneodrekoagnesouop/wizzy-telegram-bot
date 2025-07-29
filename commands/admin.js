@@ -461,7 +461,11 @@ module.exports = () => {
       });
 
       message += `\n💷 Total: £${order.totalAmount.toFixed(2)}\n`;
-      message += `🏠 Shipping to: ${order.shippingDetails.street}, ${order.shippingDetails.city}\n`;
+      message +=
+        `\n🏠 Shipping to:\n${order.shippingDetails.name}\n` +
+        `${order.shippingDetails.street}\n` +
+        `${order.shippingDetails.city}, ${order.shippingDetails.postalCode}\n` +
+        `${order.shippingDetails.country}\n`;
 
       if (order.trackingNumber) {
         message += `📦 Tracking: ${order.trackingNumber}\n`;

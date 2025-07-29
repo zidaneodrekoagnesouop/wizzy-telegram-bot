@@ -3,6 +3,7 @@ const Product = require("../models/Product");
 const User = require("../models/User");
 const Order = require("../models/Order");
 const paymentMethods = require("../config/paymentMethods");
+const { ADMIN_IDS } = require("../config/env");
 const {
   getCartKeyboard,
   getMainKeyboard,
@@ -235,6 +236,45 @@ module.exports = () => {
           `After payment, your order will be processed once we confirm the transaction.`,
         { parse_mode: "HTML" }
       );
+
+      // NEW CODE: Notify all admins about the new order
+      const adminMessage =
+        `🆕 New Order Received!\n\n` +
+        `📦 Order ID: ${order._id}\n` +
+        `👤 Customer: ${query.from.first_name || "Unknown"} (ID: ${userId}${
+          query.from.username ? `, @${query.from.username}` : ""
+        })\n` +
+        `💰 Amount: £${order.totalAmount.toFixed(2)}\n` +
+        `📅 Date: ${order.createdAt.toLocaleString()}\n` +
+        `🔄 Status: ${order.status}\n\n` +
+        `📝 Items:\n${order.items
+          .map(
+            (item) =>
+              `- ${item.productId} (Qty: ${
+                item.quantity
+              }) @ £${item.priceAtPurchase.toFixed(2)}`
+          )
+          .join("\n")}\n\n` +
+        `🏠 Shipping to:\n${order.shippingDetails.name}\n` +
+        `${order.shippingDetails.street}\n` +
+        `${order.shippingDetails.city}, ${order.shippingDetails.postalCode}\n` +
+        `${order.shippingDetails.country}\n\n` +
+        `💳 Payment Method: ${selectedMethod.name}\n` +
+        `Amount: ${amountInCrypto.toFixed(8)} ${selectedMethod.ticker}\n\n` +
+        `Use /order_details ${order._id} for more info\n` +
+        `Use /confirm_payment ${order._id} once payment is received`;
+
+      // Send notification to all admins
+      ADMIN_IDS.forEach(async (adminId) => {
+        try {
+          await bot.sendMessage(adminId, adminMessage, { parse_mode: "HTML" });
+        } catch (error) {
+          console.error(
+            `Failed to send order notification to admin ${adminId}:`,
+            error.message
+          );
+        }
+      });
 
       // Schedule expiration check
       setTimeout(async () => {
