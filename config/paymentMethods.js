@@ -11,12 +11,12 @@ module.exports = [
     walletAddress: "0xb54c4B5883CC994C7c0e007F66C12b21fBcC30fb",
     conversionRate: 0.00058 // GBP to ETH (based on current ~£1,700/ETH)
   },
-  {
-    name: "Litecoin (LTC)",
-    ticker: "LTC",
-    walletAddress: "ltc1qthysfgku52mzrj029834gkclzzd80etts3j32t",
-    conversionRate: 0.014 // GBP to LTC (based on current ~£70/LTC)
-  },
+  // {
+  //   name: "Litecoin (LTC)",
+  //   ticker: "LTC",
+  //   walletAddress: "ltc1qthysfgku52mzrj029834gkclzzd80etts3j32t",
+  //   conversionRate: 0.014 // GBP to LTC (based on current ~£70/LTC)
+  // },
   {
     name: "Tether - Tron TRC20 (USDT)",
     ticker: "USDT",
