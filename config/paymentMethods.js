@@ -2,7 +2,7 @@ module.exports = [
   {
     name: "Bitcoin (BTC)",
     ticker: "BTC",
-    walletAddress: "1JPbJBBwa4ygHsjX6jARe7g8y611ut29Mk",
+    walletAddress: "bc1qvxvkcdw43c3utfe34d8xjl4amrarcerfxd87s2",
     conversionRate: 0.000014753179310141336, // GBP to BTC (based on current ~£43,000/BTC)
   },
   {
@@ -14,7 +14,7 @@ module.exports = [
   {
     name: "Litecoin (LTC)",
     ticker: "LTC",
-    walletAddress: "LVASatfu1XTNvyBspTEkGG5APrddk5RFjd",
+    walletAddress: "ltc1qygq8mqgfayt39xakrl2tnqmpsltmzpfgsu0cxp",
     conversionRate: 0.015903307888040712, // GBP to LTC (based on current ~£70/LTC)
   },
   {
