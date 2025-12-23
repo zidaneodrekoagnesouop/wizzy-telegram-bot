@@ -4,6 +4,7 @@ const User = require("../models/User");
 const Order = require("../models/Order");
 const paymentMethods = require("../config/paymentMethods");
 const { ADMIN_IDS } = require("../config/env");
+const { getCategoriesWithCount } = require("../utils/helpers");
 const {
   getCartKeyboard,
   getMainKeyboard,
@@ -15,9 +16,14 @@ const checkoutStates = new Map();
 
 module.exports = () => {
   // View cart
-  bot.onText(/🛒 My Cart/, async (msg) => {
+  bot.onText(/\/view_cart/, async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
+
+    const specialCategories = (await getCategoriesWithCount()).filter(
+      (cat) =>
+        cat.name === "💰 TIP THE UKP TEAM 🏆" || cat.name === "🚛 BULK 🚛"
+    );
 
     const user = await User.findOne({ userId }).populate("cart.productId");
 
@@ -25,7 +31,7 @@ module.exports = () => {
       return bot.sendMessage(
         chatId,
         "Your cart is empty.",
-        getMainKeyboard(userId)
+        getMainKeyboard(userId, specialCategories)
       );
     }
 
@@ -36,49 +42,97 @@ module.exports = () => {
   bot.on("callback_query", async (query) => {
     const chatId = query.message.chat.id;
     const userId = query.from.id;
+    const messageId = query.message.message_id;
     const data = query.data;
+
+    const specialCategories = (await getCategoriesWithCount()).filter(
+      (cat) =>
+        cat.name === "💰 TIP THE UKP TEAM 🏆" || cat.name === "🚛 BULK 🚛"
+    );
 
     const user = await User.findOne({ userId }).populate("cart.productId");
     if (!user) return;
 
+    if (data === "go_to_cart") {
+      const user = await User.findOne({ userId }).populate("cart.productId");
+
+      if (!user || user.cart.length === 0) {
+        return bot.editMessageText("Your cart is empty.", {
+          chat_id: chatId,
+          message_id: messageId,
+          ...getMainKeyboard(userId, specialCategories),
+        });
+      }
+
+      await updateCartMessage(chatId, messageId, user);
+    }
+
     // Add to cart handler - THIS IS THE FIXED VERSION
-    if (data.startsWith("add_to_cart_")) {
+    else if (data.startsWith("add_to_cart_")) {
       const parts = data.split("_");
-      const productId = parts[3]; // Changed index to match the callback data
-      const quantity = parseInt(parts[4]) || 1;
+      const productId = parts[3];
+      const quantity = parseFloat(parts[4]) || 1;
 
       const product = await Product.findById(productId);
       if (!product) {
         return bot.answerCallbackQuery(query.id, {
-          text: "Product not found!",
+          text: "❌ Product not found!",
+          show_alert: true,
         });
       }
 
-      const unitPrice = product.getPriceForQuantity(quantity);
+      // 🔄 Always fetch the latest user data
+      const freshUser = await User.findOne({ userId: userId });
 
-      // Check if product already in cart
-      const existingItemIndex = user.cart.findIndex(
+      // ✅ Determine minimum allowed quantity
+      const minAllowedQuantity = Math.min(
+        ...product.priceTiers.map((tier) => tier.minQuantity)
+      );
+
+      // ✅ Check if product already exists in the user's updated cart
+      const existingItemIndex = freshUser.cart.findIndex(
         (item) => item.productId.toString() === productId
       );
 
+      let currentCartQuantity = 0;
       if (existingItemIndex >= 0) {
-        // Update existing item
-        user.cart[existingItemIndex].quantity += quantity;
-        user.cart[existingItemIndex].unitPrice = unitPrice;
+        currentCartQuantity = freshUser.cart[existingItemIndex].quantity;
+      }
+
+      const finalTotalQuantity = currentCartQuantity + quantity;
+
+      // ✅ Only block if the final total is still below the minimum
+      if (finalTotalQuantity < minAllowedQuantity) {
+        const remainingNeeded = minAllowedQuantity - currentCartQuantity;
+
+        return bot.answerCallbackQuery(query.id, {
+          text: `⚠️ Minimum order quantity for "${product.name}" is ${minAllowedQuantity}. \n\nYou currently have ${currentCartQuantity} in your cart. Add ${remainingNeeded} or more.`,
+          show_alert: true,
+        });
+      }
+
+      // ✅ Determine unit price based on final total quantity
+      const unitPrice = product.getPriceForQuantity(finalTotalQuantity);
+
+      if (existingItemIndex >= 0) {
+        // Update existing cart item
+        freshUser.cart[existingItemIndex].quantity = finalTotalQuantity;
+        freshUser.cart[existingItemIndex].unitPrice = unitPrice;
       } else {
         // Add new item
-        user.cart.push({
+        freshUser.cart.push({
           productId,
           quantity,
           unitPrice,
         });
       }
 
-      await user.save();
+      await freshUser.save();
+
       await bot.answerCallbackQuery(query.id, {
-        text: "Product added to cart!",
+        text: `✅ ${product.name} added to cart! Total: ${finalTotalQuantity} ${product.unit}(s)`,
+        show_alert: true,
       });
-      return;
     }
 
     // Increase quantity
@@ -143,7 +197,7 @@ module.exports = () => {
         await bot.sendMessage(
           chatId,
           "Your cart is now empty.",
-          getMainKeyboard(userId)
+          getMainKeyboard(userId, specialCategories)
         );
       } else {
         await updateCartMessage(chatId, query.message.message_id, user);
@@ -182,6 +236,53 @@ module.exports = () => {
       return;
     }
 
+    // ✅ Handle delivery method selection
+    else if (data.startsWith("delivery_")) {
+      const checkoutState = checkoutStates.get(userId);
+      if (!checkoutState) return;
+
+      let deliveryFee = 0;
+      let deliveryLabel = "";
+
+      if (data === "delivery_within_uk") {
+        deliveryFee = 5;
+        deliveryLabel = "TRACKED24 - £5";
+      } else if (data === "delivery_outside_uk") {
+        deliveryFee = 50;
+        deliveryLabel = "Outside UK - Tracked - £50";
+      }
+
+      checkoutState.deliveryMethod = {
+        type: deliveryLabel,
+        fee: deliveryFee,
+      };
+
+      // ✅ Add delivery fee to total
+      checkoutState.totalAmount += deliveryFee;
+      checkoutState.step = "payment_method";
+      checkoutStates.set(userId, checkoutState);
+
+      await bot.answerCallbackQuery(query.id, {
+        text: `✅ Delivery method selected: ${deliveryLabel}`,
+        show_alert: true,
+      });
+
+      // Proceed to payment methods
+      await bot.editMessageText(
+        `✅ Delivery method: <b>${deliveryLabel}</b>\n\n💰 Total amount (including delivery): <b>£${checkoutState.totalAmount.toFixed(
+          2
+        )}</b>\n\nPlease select your payment method:`,
+        {
+          chat_id: chatId,
+          message_id: query.message.message_id,
+          parse_mode: "HTML",
+          ...getPaymentMethodsKeyboard(paymentMethods),
+        }
+      );
+
+      return;
+    }
+
     // Payment method selection
     if (data.startsWith("pay_with_")) {
       const checkoutState = checkoutStates.get(userId);
@@ -207,6 +308,7 @@ module.exports = () => {
         })),
         totalAmount: checkoutState.totalAmount,
         shippingDetails: checkoutState.shippingDetails,
+        deliveryMethod: checkoutState.deliveryMethod,
         paymentMethod: {
           cryptocurrency: selectedMethod.ticker,
           walletAddress: selectedMethod.walletAddress,
@@ -225,22 +327,54 @@ module.exports = () => {
 
       // Send payment instructions
       await bot.deleteMessage(chatId, query.message.message_id);
+
+      // 🧾 Calculate time left in hours and minutes
+      const now = new Date();
+      const timeLeftMs = paymentExpiresAt - now;
+      const hoursLeft = Math.floor(timeLeftMs / (1000 * 60 * 60));
+      const minutesLeft = Math.floor(
+        (timeLeftMs % (1000 * 60 * 60)) / (1000 * 60)
+      );
+      const timeLeft = `${hoursLeft}h ${minutesLeft}m`;
+
+      // 🛒 Build order item list with numbering
+      let itemsList = "";
+      for (let i = 0; i < order.items.length; i++) {
+        const item = order.items[i];
+        const product = await Product.findById(item.productId);
+        if (product) {
+          itemsList += `${i + 1}. <b>${
+            product.name
+          }</b> <code>${item.quantity.toFixed(2)}</code> ${
+            product.unit
+          } — <b>£${(item.priceAtPurchase * item.quantity).toFixed(2)}</b>\n`;
+        }
+      }
+
+      // 📩 Send detailed payment instruction message
       await bot.sendMessage(
         chatId,
-        `Please send exactly ${amountInCrypto.toFixed(8)} ${
-          selectedMethod.ticker
-        } to:\n` +
-          `<code>${selectedMethod.walletAddress}</code>\n\n` +
-          `Amount in GBP: £${checkoutState.totalAmount.toFixed(2)}\n` +
-          `Payment expires at: ${paymentExpiresAt.toLocaleString()}\n\n` +
-          `After payment, your order will be processed once we confirm the transaction.`,
+        `💳 <b>Order ID:</b> <code>${order._id}</code>\n\n` +
+          `🔄 Status: ${order.status}\n` +
+          `⏰ <b>Time left to pay:</b> ${timeLeft}\n\n` +
+          `Payment Address: <code>${selectedMethod.walletAddress}</code>\n\n` +
+          `Amount: <code>${amountInCrypto.toFixed(8)}</code> ${
+            selectedMethod.ticker
+          }\n\n` +
+          `Network: <b>${selectedMethod.name}</b>\n\n` +
+          `Please ensure that you send the exact ${selectedMethod.ticker} amount specified. It's important to note that certain exchanges or wallets may deduct fees from your payment, so kindly double-check the amount before sending your payment to make sure you sent the correct amount.\n\n` +
+          `${itemsList}\n` +
+          `🚚 <b>Delivery:</b> ${
+            checkoutState.deliveryMethod?.type || "Not specified"
+          }\n` +
+          `💷 <b>Total:</b> £${checkoutState.totalAmount.toFixed(2)}`,
         { parse_mode: "HTML" }
       );
 
       // NEW CODE: Notify all admins about the new order
       const adminMessage =
         `🆕 New Order Received!\n\n` +
-        `📦 Order ID: ${order._id}\n` +
+        `📦 Order ID: <code>${order._id}</code>\n` +
         `👤 Customer: ${query.from.first_name || "Unknown"} (ID: ${userId}${
           query.from.username ? `, @${query.from.username}` : ""
         })\n` +
@@ -260,9 +394,10 @@ module.exports = () => {
         `${order.shippingDetails.city}, ${order.shippingDetails.postalCode}\n` +
         `${order.shippingDetails.country}\n\n` +
         `💳 Payment Method: ${selectedMethod.name}\n` +
+        `🚚 Delivery: ${order.deliveryMethod?.type || "N/A"}\n` +
         `Amount: ${amountInCrypto.toFixed(8)} ${selectedMethod.ticker}\n\n` +
-        `Use /order_details ${order._id} for more info\n` +
-        `Use /confirm_payment ${order._id} once payment is received`;
+        `Use <code>/order_details ${order._id}</code> for more info\n` +
+        `Use <code>/confirm_payment ${order._id}</code> once payment is received`;
 
       // Send notification to all admins
       ADMIN_IDS.forEach(async (adminId) => {
@@ -298,7 +433,7 @@ module.exports = () => {
       await bot.sendMessage(
         chatId,
         "Checkout cancelled. Your cart has been preserved.",
-        getMainKeyboard(userId)
+        getMainKeyboard(userId, specialCategories)
       );
     }
   });
@@ -367,18 +502,26 @@ module.exports = () => {
       return;
     }
 
-    // Handle country
+    // ✅ Handle country
     if (replyToMessage.text === "Please enter your country:") {
       checkoutState.shippingDetails.country = text;
-      checkoutState.step = "payment_method";
+      checkoutState.step = "delivery_method";
       checkoutStates.set(userId, checkoutState);
 
-      // Show payment methods
-      await bot.sendMessage(
-        chatId,
-        "Please select your payment method:",
-        getPaymentMethodsKeyboard(paymentMethods)
-      );
+      // 🆕 Ask user to select delivery option
+      await bot.sendMessage(chatId, "🚚 Please select your delivery method:", {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "TRACKED24 - £5",
+                callback_data: "delivery_within_uk",
+              },
+            ],
+            [{ text: "❌ Cancel Checkout", callback_data: "cancel_checkout" }],
+          ],
+        },
+      });
       return;
     }
   });
@@ -399,25 +542,32 @@ module.exports = () => {
       return sum + item.unitPrice * item.quantity;
     }, 0);
 
-    let message = "🛒 Your Cart:\n\n";
-    cartItems.forEach((item) => {
-      message += `${item.product.name} - ${
-        item.quantity
+    let message =
+      "This is a list of all the items in your basket. If you want to remove any of them, select the name of the item from the list.\n\n";
+    cartItems.forEach((item, index) => {
+      message += `${index + 1}. <b>${
+        item.product.name
+      } — ${item.quantity.toFixed(2)} ${
+        item.product.unit
       } × £${item.unitPrice.toFixed(2)} = £${(
         item.unitPrice * item.quantity
-      ).toFixed(2)}\n`;
+      ).toFixed(2)}</b>\n`;
     });
-    message += `\nTotal: £${total.toFixed(2)}`;
+    message += `\nTotal : <b>£${total.toFixed(2)}</b>`;
 
     try {
       if (messageId) {
         await bot.editMessageText(message, {
           chat_id: chatId,
           message_id: messageId,
+          parse_mode: "HTML",
           ...getCartKeyboard(cartItems),
         });
       } else {
-        await bot.sendMessage(chatId, message, getCartKeyboard(cartItems));
+        await bot.sendMessage(chatId, message, {
+          parse_mode: "HTML",
+          ...getCartKeyboard(cartItems),
+        });
       }
     } catch (error) {
       console.log("Error updating cart message:", error.message);

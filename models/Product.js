@@ -8,7 +8,7 @@ const priceTierSchema = new mongoose.Schema({
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: { type: String, required: true },
-  basePrice: { type: Number, required: true },
+  unit: { type: String, required: true },
   priceTiers: [priceTierSchema],
   category: { type: String, required: true }, // Main category
   subCategory: { type: String }, // Sub-category
@@ -17,17 +17,17 @@ const productSchema = new mongoose.Schema({
 });
 
 productSchema.methods.getPriceForQuantity = function (quantity) {
-  // Sort tiers by minQuantity descending
+  // Sort tiers by minQuantity ascending
   const sortedTiers = [...this.priceTiers].sort(
-    (a, b) => b.minQuantity - a.minQuantity
+    (a, b) => a.minQuantity - b.minQuantity
   );
 
   // Find the first tier where quantity >= minQuantity
-  const applicableTier = sortedTiers.find(
+  const applicableTier = sortedTiers.reverse().find(
     (tier) => quantity >= tier.minQuantity
   );
 
-  return applicableTier ? applicableTier.price : this.basePrice;
+  return applicableTier ? applicableTier.price : sortedTiers.reverse()[0].price;
 };
 
 module.exports = mongoose.model("Product", productSchema);

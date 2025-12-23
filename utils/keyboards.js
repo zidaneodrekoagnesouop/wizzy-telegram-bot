@@ -1,21 +1,78 @@
 const { ADMIN_IDS } = require("../config/env");
 
-const getMainKeyboard = (userId) => {
+const getMainKeyboard = (userId, specialCat) => {
   const isAdmin = ADMIN_IDS.includes(userId);
 
-  const keyboard = [
-    [{ text: "🛍️ Browse Products" }, { text: "🛒 My Cart" }],
-    [{ text: "📦 My Orders" }],
+  const inline_keyboard = [
+    [
+      {
+        text: "💊 Listings", // Text shown on the button
+        callback_data: "💊 Browse Products", // Data sent to your bot on click
+      },
+    ],
+    [
+      {
+        text: "🔍 Search product",
+        callback_data: "search_product",
+      },
+    ],
+    // [
+    //   {
+    //     text: "💬 UKP TELEGRAM GROUP 💬",
+    //     callback_data: "telegram_groups",
+    //   },
+    // ],
+    // ...specialCat.map((category) => [
+    //   {
+    //     text: `${category.name}`,
+    //     callback_data: `category_${category.name}`,
+    //   },
+    // ]),
+    // [
+    //   {
+    //     text: "🚨 READ BEFORE ORDER 🚨",
+    //     callback_data: "read_before_order",
+    //   },
+    // ],
+    // [
+    //   {
+    //     text: "🔐 matrix LINKS 🔐",
+    //     callback_data: "matrix_links",
+    //   },
+    // ],
+    // [
+    //   {
+    //     text: "🤠 ABOUT UKP 🍸",
+    //     callback_data: "about_ukp",
+    //   },
+    // ],
+    [
+      {
+        text: "📦 Orders",
+        callback_data: "my_orders",
+      },
+      {
+        text: "🛒 View Cart",
+        callback_data: "go_to_cart",
+      },
+    ],
+    [
+      {
+        text: "📭 Contact",
+        callback_data: "live_chat",
+      },
+    ],
   ];
 
   if (isAdmin) {
-    keyboard.push([{ text: "👨‍💻 Admin Panel" }]);
+    inline_keyboard.push([
+      { text: "👨‍💻 Admin Panel", callback_data: "admin_panel" },
+    ]);
   }
 
   return {
     reply_markup: {
-      keyboard,
-      resize_keyboard: true,
+      inline_keyboard,
     },
   };
 };
@@ -40,6 +97,10 @@ const getCategoriesKeyboard = (categories) => ({
           callback_data: `category_${category.name}`,
         },
       ]),
+      [
+        { text: "🔙 Main Menu", callback_data: "back_to_main" },
+        { text: "🛒 View Cart", callback_data: "go_to_cart" },
+      ],
     ],
   },
 });
@@ -50,40 +111,48 @@ const getProductsListKeyboard = (products) => ({
       ...products.map((product) => [
         { text: product.name, callback_data: `product_${product._id}` },
       ]),
-      [{ text: "🔙 Back to Categories", callback_data: "back_to_categories" }],
+      [
+        { text: "🔙 Back to Categories", callback_data: "back_to_categories" },
+        { text: "🛒 View Cart", callback_data: "go_to_cart" },
+      ],
     ],
   },
 });
 
-const getProductDetailsKeyboard = (
-  productId,
-  quantity = 1,
-  isAdmin = false
-) => {
+const getProductDetailsKeyboard = (product, quantity = 1, isAdmin = false) => {
+  const unitPrice = product.getPriceForQuantity(quantity);
+  const totalPrice = unitPrice * quantity;
   const keyboard = [
-    [
-      { text: "➖ Decrease", callback_data: `decrease_qty_${productId}` },
-      { text: `Qty: ${quantity}`, callback_data: `show_qty_${productId}` },
-      { text: "➕ Increase", callback_data: `increase_qty_${productId}` },
-    ],
     [
       {
         text: "✏️ Enter Quantity Manually",
-        callback_data: `manual_qty_${productId}`,
+        callback_data: `manual_qty_${product._id}`,
       },
     ],
     [
+      { text: "➖ Decrease", callback_data: `decrease_qty_${product._id}` },
       {
-        text: "🛒 Add to Cart",
-        callback_data: `add_to_cart_${productId}_${quantity}`,
+        text: "🛒 View Cart",
+        callback_data: "go_to_cart",
       },
+      { text: "➕ Increase", callback_data: `increase_qty_${product._id}` },
+    ],
+    [
+      {
+        text: `Add to Cart : ${quantity} unit [£${totalPrice.toFixed(2)}]`,
+        callback_data: `add_to_cart_${product._id}_${quantity}`,
+      },
+    ],
+    [
+      { text: "🔙 Back to Categories", callback_data: "back_to_categories" },
+      { text: "🔙 Main Menu", callback_data: "back_to_main" },
     ],
   ];
 
   if (isAdmin) {
     keyboard.push([
-      { text: "✏️ Edit", callback_data: `edit_product_${productId}` },
-      { text: "🗑️ Delete", callback_data: `delete_product_${productId}` },
+      { text: "✏️ Edit", callback_data: `edit_product_${product._id}` },
+      { text: "🗑️ Delete", callback_data: `delete_product_${product._id}` },
     ]);
   }
 
@@ -99,17 +168,18 @@ const getCartKeyboard = (cartItems) => ({
     inline_keyboard: [
       ...cartItems.map((item) => [
         {
-          text: `➖ ${item.product.name}`,
-          callback_data: `decrease_${item._id}`,
+          text: `❌ ${item.product.name} — ${item.quantity.toFixed(2)} ${
+            item.product.unit
+          } × £${item.unitPrice.toFixed(2)} = £${(
+            item.unitPrice * item.quantity
+          ).toFixed(2)}`,
+          callback_data: `remove_${item._id}`,
         },
-        {
-          text: `➕ ${item.product.name}`,
-          callback_data: `increase_${item._id}`,
-        },
-        { text: `❌ Remove`, callback_data: `remove_${item._id}` },
       ]),
-      [{ text: "💳 Checkout", callback_data: "checkout" }],
-      [{ text: "🔙 Back to Products", callback_data: "back_to_products" }],
+      [
+        { text: "🔙 Main Menu", callback_data: "back_to_main" },
+        { text: "💳 Checkout", callback_data: "checkout" },
+      ],
     ],
   },
 });
@@ -175,6 +245,7 @@ const getCategoryContentsKeyboard = (category, contents) => {
   // Add back button
   keyboard.push([
     { text: "🔙 Back to Categories", callback_data: "back_to_categories" },
+    { text: "🛒 View Cart", callback_data: "go_to_cart" },
   ]);
 
   return {

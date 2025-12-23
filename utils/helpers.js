@@ -3,19 +3,25 @@ const Product = require("../models/Product");
 const formatProduct = (product) => {
   let message = `
 <b>${product.name}</b>
+${
+  product.subCategory
+    ? product.category + " → " + product.subCategory
+    : product.category
+}
+
 ${product.description}
 
-💷 Base Price: £${product.basePrice.toFixed(2)}
 `;
 
-  // if (product.priceTiers && product.priceTiers.length > 0) {
-  //   message += `\n📊 Bulk Pricing:\n`;
-  //   product.priceTiers
-  //     .sort((a, b) => a.minQuantity - b.minQuantity)
-  //     .forEach((tier) => {
-  //       message += `- ${tier.minQuantity}+: $${tier.price.toFixed(2)} each\n`;
-  //     });
-  // }
+  if (product.priceTiers && product.priceTiers.length > 0) {
+    product.priceTiers
+      .sort((a, b) => a.minQuantity - b.minQuantity)
+      .forEach((tier) => {
+        message += `from <code>${tier.minQuantity.toFixed(2)}</code> ${
+          product.unit
+        } @ £${tier.price.toFixed(2)}\n`;
+      });
+  }
 
   return message;
 };

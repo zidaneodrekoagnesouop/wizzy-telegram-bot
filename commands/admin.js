@@ -1,5 +1,6 @@
 const bot = require("../services/botService");
 const Product = require("../models/Product");
+const User = require("../models/User");
 const Order = require("../models/Order"); // Add this import
 const {
   getAdminKeyboard,
@@ -7,12 +8,13 @@ const {
 } = require("../utils/keyboards");
 const { ADMIN_IDS } = require("../config/env");
 const { formatProduct } = require("../utils/helpers");
+const getCryptoRates = require("../utils/getCryptoRates");
 
 let productCache = {};
 
 module.exports = () => {
   // Admin panel entry
-  bot.onText(/👨‍💻 Admin Panel/, async (msg) => {
+  bot.onText(/\/admin_panel/, async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
 
@@ -24,6 +26,124 @@ module.exports = () => {
     }
 
     bot.sendMessage(chatId, "👨‍💻 Welcome to Admin Panel", getAdminKeyboard());
+  });
+
+  // View GBP Crypto Rates
+  bot.onText(/\/view_rates/, async (msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    const rates = await getCryptoRates();
+
+    if (!ADMIN_IDS.includes(userId)) {
+      return bot.sendMessage(
+        chatId,
+        "⚠️ You are not authorized to perform this action."
+      );
+    }
+
+    bot.sendMessage(
+      chatId,
+      `BTC : <code>${rates.BTC}</code>\n` +
+        `ETH : <code>${rates.ETH}</code>\n` +
+        `LTC : <code>${rates.LTC}</code>\n` +
+        `USDT : <code>${rates.USDT}</code>\n` +
+        `XMR : <code>${rates.XMR}</code>`,
+      { parse_mode: "HTML" }
+    );
+  });
+
+  // NOTIFY COMMAND (ADMIN ONLY)
+  bot.onText(/\/notify/, async (msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+
+    if (!ADMIN_IDS.includes(userId)) {
+      return bot.sendMessage(
+        chatId,
+        "⚠️ You are not authorized to use this command."
+      );
+    }
+
+    // Step 1 — Ask admin for photo or skip
+    bot.sendMessage(
+      chatId,
+      "📸 <b>Send the photo you want to include at the top of the broadcast.\n\nOr type <code>skip</code> to continue without a photo.</b>",
+      {
+        parse_mode: "HTML",
+      }
+    );
+
+    // Wait for admin's next message (photo or "skip")
+    bot.once("message", async (photoReply) => {
+      let photoId = null;
+
+      // If admin sends a photo
+      if (photoReply.photo) {
+        const photos = photoReply.photo;
+        photoId = photos[photos.length - 1].file_id; // highest resolution
+      } else if (photoReply.text?.toLowerCase() !== "skip") {
+        // If plain text but not "skip", cancel
+        return bot.sendMessage(
+          chatId,
+          "❌ Invalid input. Please send a photo or type <code>skip</code> next time.",
+          { parse_mode: "HTML" }
+        );
+      }
+
+      // Step 2 — Ask for the broadcast message
+      bot.sendMessage(
+        chatId,
+        "✏️ <b>Now send the message you want to broadcast to all users:</b>",
+        {
+          parse_mode: "HTML",
+        }
+      );
+
+      bot.once("message", async (textReply) => {
+        if (!textReply.text || textReply.text.startsWith("/")) {
+          return bot.sendMessage(
+            chatId,
+            "❌ Broadcast cancelled. Please send plain text next time."
+          );
+        }
+
+        const broadcastText = textReply.text;
+
+        const options = {
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🗑️ Dismiss", callback_data: "delete_broadcast" }],
+            ],
+          },
+        };
+
+        // Step 3 — Fetch users
+        const users = await User.find({}, "userId");
+
+        // Step 4 — Broadcast to each user
+        for (const user of users) {
+          try {
+            if (photoId) {
+              // Send photo + caption (message)
+              await bot.sendPhoto(user.userId, photoId, {
+                caption: broadcastText,
+                ...options,
+              });
+            } else {
+              // Send text only
+              await bot.sendMessage(user.userId, broadcastText, options);
+            }
+          } catch (err) {
+            console.error("Failed to send to user:", user.userId, err);
+          }
+        }
+
+        bot.sendMessage(chatId, "✅ <b>Broadcast sent to all users!</b>", {
+          parse_mode: "HTML",
+        });
+      });
+    });
   });
 
   // Add product flow
@@ -60,21 +180,15 @@ module.exports = () => {
         break;
       case "description":
         cache.description = text;
-        cache.step = "price";
+        cache.step = "unit";
         bot.sendMessage(
           chatId,
-          "Please enter the product price (numbers only):"
+          "Please enter measurement unit for your product:"
         );
         break;
       // In the product creation steps (around line 40)
-      case "price":
-        if (isNaN(text)) {
-          return bot.sendMessage(
-            chatId,
-            "Please enter a valid number for the base price:"
-          );
-        }
-        cache.basePrice = parseFloat(text);
+      case "unit":
+        cache.unit = text;
         cache.step = "priceTiers";
         bot.sendMessage(
           chatId,
@@ -98,13 +212,13 @@ module.exports = () => {
 
         if (!cache.priceTiers) cache.priceTiers = [];
         cache.priceTiers.push({
-          minQuantity: parseInt(qty),
+          minQuantity: parseFloat(qty),
           price: parseFloat(price),
         });
 
         bot.sendMessage(
           chatId,
-          `Added tier: ${qty}+ units at $${price} each\nEnter another tier or "done" to finish:`,
+          `Added tier: ${qty}+ ${cache.unit} at £${price} each\nEnter another tier or "done" to finish:`,
           { reply_markup: { force_reply: true } }
         );
         break;
@@ -132,11 +246,11 @@ module.exports = () => {
           cache.imageUrl = msg.photo[msg.photo.length - 1].file_id;
         }
 
-        // Create the product with basePrice and priceTiers
+        // Create the product with unit and priceTiers
         const product = new Product({
           name: cache.name,
           description: cache.description,
-          basePrice: cache.basePrice,
+          unit: cache.unit,
           priceTiers: cache.priceTiers || [],
           category: cache.category,
           subCategory: cache.subCategory || undefined,
@@ -149,7 +263,7 @@ module.exports = () => {
         bot.sendMessage(
           chatId,
           `✅ Product added successfully!\n\n${formatProduct(product)}`,
-          getAdminKeyboard()
+          { parse_mode: "HTML", ...getAdminKeyboard() }
         );
         break;
     }
@@ -180,12 +294,12 @@ module.exports = () => {
         await bot.sendPhoto(chatId, product.imageUrl, {
           caption: message,
           parse_mode: "HTML",
-          ...getProductDetailsKeyboard(product._id, 1, true),
+          ...getProductDetailsKeyboard(product, 1, true),
         });
       } else {
         await bot.sendMessage(chatId, message, {
           parse_mode: "HTML",
-          ...getProductDetailsKeyboard(product._id, 1, true),
+          ...getProductDetailsKeyboard(product, 1, true),
         });
       }
     }
@@ -276,11 +390,10 @@ module.exports = () => {
   });
 
   // Ship order (add tracking number)
-  bot.onText(/\/ship_order (.+?) (.+)/, async (msg, match) => {
+  bot.onText(/\/ship_order (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     const orderId = match[1];
-    const trackingNumber = match[2];
 
     if (!ADMIN_IDS.includes(userId)) {
       return bot.sendMessage(
@@ -294,7 +407,6 @@ module.exports = () => {
         orderId,
         {
           status: "shipped",
-          trackingNumber,
           updatedAt: new Date(),
         },
         { new: true }
@@ -305,19 +417,48 @@ module.exports = () => {
       }
 
       // Notify customer
-      let trackingMessage = `🚚 Order #${order._id} has been shipped!\n\n`;
-      trackingMessage += `🔍 Tracking Number: ${trackingNumber}\n`;
+      let shippedAt = new Date();
+      const date = shippedAt.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      const time = shippedAt.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 
-      if (order.shippingDetails.country === "US") {
-        trackingMessage += `📦 Track via USPS: https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumber}`;
-      } // Add other carriers as needed
+      let customerMessage = `💳 <b>Invoice</b> <code>${order._id}</code>\n\n`;
 
-      await bot.sendMessage(order.userId, trackingMessage);
+      customerMessage += `🔄 <b>Status:</b> 🚚 Your order has been marked as Dispatched from ${date} at ${time}\n\n`;
+      customerMessage += `Your order is on its way. The seller has marked the order as shipped, please await delivery of your order. Once you have received your order, please do not forget to leave a review about the seller.\n\n`;
+
+      // List items
+      let count = 1;
+
+      for (const item of order.items) {
+        const product = await Product.findById(item.productId);
+        if (product) {
+          customerMessage += `<b>${count}. ${product.name} • ${item.quantity} ${
+            product.unit
+          } — £${(item.priceAtPurchase * item.quantity).toFixed(2)}</b>\n`;
+          count++;
+        }
+      }
+
+      customerMessage += `\n<b>Delivery:</b> ${
+        order.deliveryMethod?.type || "N/A"
+      }\n`;
+      customerMessage += `<b>Total:</b> £${order.totalAmount.toFixed(2)}\n`;
+
+      // Send notification to customer
+      await bot.sendMessage(order.userId, customerMessage, {
+        parse_mode: "HTML",
+      });
 
       await bot.sendMessage(
         chatId,
         `✅ Order #${order._id} marked as shipped\n` +
-          `📦 Tracking: ${trackingNumber}\n` +
           `Customer has been notified.`,
         getAdminKeyboard()
       );
@@ -448,7 +589,7 @@ module.exports = () => {
         return bot.sendMessage(chatId, "❌ Order not found");
       }
 
-      let message = `📦 Order #${order._id}\n`;
+      let message = `📦 Order #<code>${order._id}</code>\n`;
       message += `👤 Customer ID: ${order.userId}\n`;
       message += `🔄 Status: ${order.status}\n`;
       message += `📅 Date: ${order.createdAt.toLocaleString()}\n\n`;
@@ -471,7 +612,10 @@ module.exports = () => {
         message += `📦 Tracking: ${order.trackingNumber}\n`;
       }
 
-      await bot.sendMessage(chatId, message, getAdminKeyboard());
+      await bot.sendMessage(chatId, message, {
+        parse_mode: "HTML",
+        ...getAdminKeyboard(),
+      });
     } catch (error) {
       console.error("Order details error:", error);
       await bot.sendMessage(
