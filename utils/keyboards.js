@@ -59,7 +59,7 @@ const getMainKeyboard = (userId, specialCat) => {
     [
       {
         text: "📭 Contact",
-        callback_data: "live_chat",
+        url: "https://t.me/UKProviderEvo",
       },
     ],
   ];
